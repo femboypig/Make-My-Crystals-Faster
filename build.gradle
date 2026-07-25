@@ -21,15 +21,22 @@ plugins {
     id 'maven-publish'
 }
 
-def supportedMinecraftVersions = ["1.21.11", "26.2"]
-if (!supportedMinecraftVersions.contains(project.minecraft_version)) {
+def minecraftTargets = [
+        "1.20"   : [java: 17, obfuscated: true, taskName: "build120"],
+        "1.20.1" : [java: 17, obfuscated: true, taskName: "build1201"],
+        "1.21.11": [java: 21, obfuscated: true, taskName: "build12111"],
+        "26.1"   : [java: 25, obfuscated: false, taskName: "build261"],
+        "26.2"   : [java: 25, obfuscated: false, taskName: "build262"]
+]
+def target = minecraftTargets[project.minecraft_version]
+if (target == null) {
     throw new GradleException(
             "Unsupported Minecraft version '${project.minecraft_version}'. " +
-                    "Supported versions: ${supportedMinecraftVersions.join(', ')}"
+                    "Supported versions: ${minecraftTargets.keySet().join(', ')}"
     )
 }
 
-if (project.minecraft_version == "1.21.11") {
+if (target.obfuscated) {
     apply plugin: "fabric-loom"
 } else {
     apply plugin: "net.fabricmc.fabric-loom"
@@ -54,7 +61,7 @@ repositories {
 dependencies {
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    if (project.minecraft_version == "1.21.11") {
+    if (target.obfuscated) {
         mappings loom.officialMojangMappings()
         modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     } else {
@@ -63,7 +70,7 @@ dependencies {
 
 }
 
-def targetJavaVersion = project.minecraft_version == "1.21.11" ? 21 : 25
+def targetJavaVersion = target.java
 
 processResources {
     inputs.property "version", project.version
@@ -111,20 +118,14 @@ jar {
     }
 }
 
-tasks.register("build12111", GradleBuild) {
-    group = "build"
-    description = "Builds the mod for Minecraft 1.21.11."
-    dir = rootDir
-    tasks = ["build"]
-    startParameter.projectProperties = ["minecraft_version": "1.21.11"]
-}
-
-tasks.register("build262", GradleBuild) {
-    group = "build"
-    description = "Builds the mod for Minecraft 26.2."
-    dir = rootDir
-    tasks = ["build"]
-    startParameter.projectProperties = ["minecraft_version": "26.2"]
+minecraftTargets.each { minecraftVersion, configuration ->
+    tasks.register(configuration.taskName, GradleBuild) {
+        group = "build"
+        description = "Builds the mod for Minecraft ${minecraftVersion}."
+        dir = rootDir
+        tasks = ["build"]
+        startParameter.projectProperties = ["minecraft_version": minecraftVersion]
+    }
 }
 
 // configure the maven publication
