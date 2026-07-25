@@ -1,9 +1,41 @@
+/*
+ * Make My Crystals Faster
+ * Copyright (C) 2026 femboyPig
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, version 3 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 plugins {
-    id 'net.fabricmc.fabric-loom' version '1.17-SNAPSHOT'
+    id 'fabric-loom' version '1.17-SNAPSHOT' apply false
+    id 'net.fabricmc.fabric-loom' version '1.17-SNAPSHOT' apply false
     id 'maven-publish'
 }
 
-version = project.mod_version
+def supportedMinecraftVersions = ["1.21.11", "26.2"]
+if (!supportedMinecraftVersions.contains(project.minecraft_version)) {
+    throw new GradleException(
+            "Unsupported Minecraft version '${project.minecraft_version}'. " +
+                    "Supported versions: ${supportedMinecraftVersions.join(', ')}"
+    )
+}
+
+if (project.minecraft_version == "1.21.11") {
+    apply plugin: "fabric-loom"
+} else {
+    apply plugin: "net.fabricmc.fabric-loom"
+}
+
+version = "${project.mod_version}+mc${project.minecraft_version}"
 group = project.maven_group
 
 base {
@@ -22,14 +54,22 @@ repositories {
 dependencies {
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    if (project.minecraft_version == "1.21.11") {
+        mappings loom.officialMojangMappings()
+        modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    } else {
+        implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    }
 
 }
+
+def targetJavaVersion = project.minecraft_version == "1.21.11" ? 21 : 25
 
 processResources {
     inputs.property "version", project.version
     inputs.property "minecraft_version", project.minecraft_version
     inputs.property "loader_version", project.loader_version
+    inputs.property "java_version", targetJavaVersion
     filteringCharset "UTF-8"
 
     filesMatching("fabric.mod.json") {
@@ -37,9 +77,12 @@ processResources {
                 "minecraft_version": project.minecraft_version,
                 "loader_version": project.loader_version
     }
+
+    filesMatching("mmcf.mixins.json") {
+        expand "java_version": targetJavaVersion
+    }
 }
 
-def targetJavaVersion = 25
 tasks.withType(JavaCompile).configureEach {
     // ensure that the encoding is set to UTF-8, no matter what the system default is
     // this fixes some edge cases with special characters not displaying correctly
@@ -66,6 +109,22 @@ jar {
     from("LICENSE.txt") {
         rename { "${it}_${project.archives_base_name}" }
     }
+}
+
+tasks.register("build12111", GradleBuild) {
+    group = "build"
+    description = "Builds the mod for Minecraft 1.21.11."
+    dir = rootDir
+    tasks = ["build"]
+    startParameter.projectProperties = ["minecraft_version": "1.21.11"]
+}
+
+tasks.register("build262", GradleBuild) {
+    group = "build"
+    description = "Builds the mod for Minecraft 26.2."
+    dir = rootDir
+    tasks = ["build"]
+    startParameter.projectProperties = ["minecraft_version": "26.2"]
 }
 
 // configure the maven publication
